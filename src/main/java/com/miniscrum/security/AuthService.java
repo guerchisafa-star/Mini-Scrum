@@ -3,7 +3,6 @@ package com.miniscrum.security;
 import com.miniscrum.entity.User;
 import com.miniscrum.enums.Role;
 import com.miniscrum.repository.UserRepository;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
@@ -13,13 +12,14 @@ import java.nio.charset.StandardCharsets;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final JwtUtil jwtUtil;
 
-    public AuthService(UserRepository userRepository) {
+    public AuthService(UserRepository userRepository, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
+        this.jwtUtil = jwtUtil;
     }
 
-    // Login : vérifie email + mot de passe
-    public AuthResponse login(LoginRequest request, HttpSession session) {
+    public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email ou mot de passe incorrect"));
 
@@ -27,15 +27,11 @@ public class AuthService {
             throw new RuntimeException("Email ou mot de passe incorrect");
         }
 
-        session.setAttribute("userId",    user.getId());
-        session.setAttribute("userEmail", user.getEmail());
-        session.setAttribute("userRole",  user.getRole().name());
-
-        return new AuthResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole().name());
+        String token = jwtUtil.generate(user.getId(), user.getEmail(), user.getRole().name());
+        return new AuthResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole().name(), token);
     }
 
-    // Register : crée un nouvel utilisateur
-    public AuthResponse register(RegisterRequest request, HttpSession session) {
+    public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email déjà utilisé");
         }
@@ -50,27 +46,16 @@ public class AuthService {
         );
         user = userRepository.save(user);
 
-        session.setAttribute("userId",    user.getId());
-        session.setAttribute("userEmail", user.getEmail());
-        session.setAttribute("userRole",  user.getRole().name());
-
-        return new AuthResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole().name());
+        String token = jwtUtil.generate(user.getId(), user.getEmail(), user.getRole().name());
+        return new AuthResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole().name(), token);
     }
 
-    // Logout : détruit la session
-    public void logout(HttpSession session) {
-        session.invalidate();
-    }
-
-    // Hash SHA-256 simple (sans Spring Security)
     private String hashPassword(String password) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(password.getBytes(StandardCharsets.UTF_8));
             StringBuilder hex = new StringBuilder();
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b));
-            }
+            for (byte b : hash) hex.append(String.format("%02x", b));
             return hex.toString();
         } catch (Exception e) {
             throw new RuntimeException("Erreur de hashage");

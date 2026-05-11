@@ -25,7 +25,7 @@ public class DashboardService {
     // Méthode principale pour récupérer les données du dashboard
     public DashboardResponse getForUser(Long userId, String role) {
         // Si l'utilisateur est ADMIN
-        if ("ADMIN".equals(role)) {
+        if ("ADMIN".equals(role) || "PRODUCT_OWNER".equals(role) || "SCRUM_MASTER".equals(role)) {
             //recuperer touts les taches
             var allTasks = taskRepository.findAll();
             //compter les taches to do
